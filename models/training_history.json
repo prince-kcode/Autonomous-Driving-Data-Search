@@ -1,0 +1,63 @@
+{
+  "epochs": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8
+  ],
+  "train_loss": [
+    0.6578,
+    0.0954,
+    0.0551,
+    0.0159,
+    0.0272,
+    0.0049,
+    0.0037,
+    0.0059
+  ],
+  "train_acc": [
+    79.95,
+    97.26,
+    98.17,
+    99.47,
+    99.47,
+    100.0,
+    99.85,
+    99.77
+  ],
+  "val_loss": [
+    0.4169,
+    0.1764,
+    0.0376,
+    0.0127,
+    0.0282,
+    0.009,
+    0.0349,
+    0.0123
+  ],
+  "val_acc": [
+    87.07,
+    94.4,
+    98.28,
+    99.57,
+    99.14,
+    99.57,
+    98.71,
+    99.14
+  ],
+  "classes": [
+    "Car / Automobile",
+    "Pedestrian / Person",
+    "Bicycle / Cyclist",
+    "Traffic Light (Red/Green/Yellow)",
+    "Traffic Sign (Speed/Stop/Yield)",
+    "Truck / Heavy Commercial Vehicle",
+    "Motorcycle / Scooter",
+    "Road Obstacle / Construction Hazard"
+  ],
+  "total_samples": 1544
+}
