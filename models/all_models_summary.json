@@ -1,0 +1,37 @@
+{
+  "status": "success",
+  "evaluation_time_seconds": 4.11,
+  "model_1": {
+    "name": "Object Recognizer (MobileNetV3 Deep CNN)",
+    "val_accuracy_pct": 99.14,
+    "weights": "models/object_recognizer.pth"
+  },
+  "model_2": {
+    "name": "Scenario & Risk Analyzer (Multimodal CLIP)",
+    "calibrated_scenes": 26,
+    "distribution": {
+      "weather": {
+        "Clear / Sunny": 11,
+        "Overcast / Cloudy": 7,
+        "Dense Fog / Haze": 4,
+        "Rainy / Wet Road": 4
+      },
+      "hazard": {
+        "LOW": 16,
+        "MODERATE": 7,
+        "HIGH": 3
+      },
+      "road_type": {
+        "Rural / Mountain Road": 4,
+        "Expressway / Highway": 15,
+        "Pedestrian Crossing": 2,
+        "Suburban / Residential": 2,
+        "Urban City Arterial": 3
+      }
+    }
+  },
+  "model_3": {
+    "name": "YOLO Object Detector (Fine-Tuned YOLOv8)",
+    "weights": "models/yolov8_autodrive.pt"
+  }
+}
