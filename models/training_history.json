@@ -10,54 +10,57 @@
     8
   ],
   "train_loss": [
-    0.6578,
-    0.0954,
-    0.0551,
-    0.0159,
-    0.0272,
-    0.0049,
-    0.0037,
-    0.0059
+    0.687,
+    0.1084,
+    0.0804,
+    0.0437,
+    0.0231,
+    0.0141,
+    0.0072,
+    0.004
   ],
   "train_acc": [
-    79.95,
-    97.26,
-    98.17,
-    99.47,
-    99.47,
-    100.0,
-    99.85,
-    99.77
+    79.29,
+    96.97,
+    97.85,
+    98.86,
+    99.18,
+    99.56,
+    99.87,
+    100.0
   ],
   "val_loss": [
-    0.4169,
-    0.1764,
-    0.0376,
-    0.0127,
-    0.0282,
-    0.009,
-    0.0349,
-    0.0123
+    0.154,
+    0.0082,
+    0.0199,
+    0.0053,
+    0.0089,
+    0.0004,
+    0.0001,
+    0.0002
   ],
   "val_acc": [
-    87.07,
-    94.4,
-    98.28,
-    99.57,
-    99.14,
-    99.57,
-    98.71,
-    99.14
+    95.36,
+    99.64,
+    99.29,
+    100.0,
+    99.64,
+    100.0,
+    100.0,
+    100.0
   ],
   "classes": [
     "Car / Automobile",
     "Pedestrian / Person",
     "Bicycle / Cyclist",
-    "Traffic Light (Red/Green/Yellow)",
+    "Traffic Light (Red Signal)",
+    "Traffic Light (Yellow Signal)",
+    "Traffic Light (Green Signal)",
     "Traffic Sign (Speed/Stop/Yield)",
     "Truck / Heavy Commercial Vehicle",
     "Motorcycle / Scooter",
-    "Road Obstacle / Construction Hazard"
+    "Road Obstacle / Construction Hazard",
+    "Forest Road / Sunlight Glare (Non-Traffic Light)"
   ],
-  "total_samples": 1544
+  "total_samples": 1864
 }

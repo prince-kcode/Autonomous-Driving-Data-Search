@@ -55,18 +55,24 @@ def run_tests():
     print("  -> PASSED")
 
     # 5. Model 3
-    print("\n[5/5] Testing Model 3: YOLO Object Detector...")
+    print("\n[5/5] Testing Model 3: YOLO Object Detector with Glare Filtering...")
     m3 = YOLODetector()
     r3 = m3.detect(img)
     print(f"  Model Name: {r3['model_name']}")
     print(f"  Detected Entities: {r3['total_objects']}")
     print(f"  Counts: {r3['counts']}")
-    print("  -> PASSED")
+
+    # Test false positive suppression on forest road with sunlight
+    forest_img = "data/foggy_forest_road.jpg"
+    if os.path.exists(forest_img):
+        forest_r = m3.detect(forest_img)
+        print(f"  Forest Road Sunlight False-Positive Check: {forest_r['counts']}")
+        assert "traffic light" not in str(forest_r['counts']).lower(), "Sunlight should not be detected as traffic light!"
+        print("  Forest Road Sunlight False-Positive Check: -> PASSED (Zero false traffic lights)")
 
     print("\n" + "=" * 60)
-    print("ALL TESTS PASSED SUCCESSFULLY! SYSTEM READY FOR LIVE DEMO!")
+    print("ALL TESTS PASSED SUCCESSFULLY! TRAFFIC LIGHT VERIFIER ACTIVE!")
     print("=" * 60)
 
 if __name__ == "__main__":
     run_tests()
-

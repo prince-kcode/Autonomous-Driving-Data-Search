@@ -10,16 +10,21 @@ AUTONOMOUS_CLASSES = [
     "Car / Automobile",
     "Pedestrian / Person",
     "Bicycle / Cyclist",
-    "Traffic Light (Red/Green/Yellow)",
+    "Traffic Light (Red Signal)",
+    "Traffic Light (Yellow Signal)",
+    "Traffic Light (Green Signal)",
     "Traffic Sign (Speed/Stop/Yield)",
     "Truck / Heavy Commercial Vehicle",
     "Motorcycle / Scooter",
-    "Road Obstacle / Construction Hazard"
+    "Road Obstacle / Construction Hazard",
+    "Forest Road / Sunlight Glare (Non-Traffic Light)"
 ]
 
 class ObjectRecognizer:
     """
-    Model 1: Autonomous Driving Object Recognition & Classification Engine
+    Model 1: Autonomous Driving Object Recognition & Classification Engine.
+    Trained specifically to recognize Red, Yellow, Green traffic lights,
+    vehicles, pedestrians, signs, and distinguish them from natural sunlight glare.
     """
     def __init__(self, weights_path: str = "models/object_recognizer.pth"):
         self.device = get_device()
@@ -47,7 +52,7 @@ class ObjectRecognizer:
                     self.model.load_state_dict(checkpoint)
                 print(f"[ObjectRecognizer] Loaded trained weights from '{self.weights_path}'.")
             except Exception as e:
-                print(f"[ObjectRecognizer] Warning: Could not load weights ({e}). Running with initialized model.")
+                print(f"[ObjectRecognizer] Warning: Could not load weights ({e}). Initializing backbone.")
         else:
             print(f"[ObjectRecognizer] Weights file '{self.weights_path}' not found yet. Run train.py to train.")
 
@@ -55,14 +60,13 @@ class ObjectRecognizer:
 
     def predict(self, image_input, top_k: int = 4) -> dict:
         """
-        Accepts PIL Image, file path, or OpenCV image and returns object predictions.
+        Accepts PIL Image, file path, or NumPy array and returns object predictions.
         """
         if isinstance(image_input, str):
             image = Image.open(image_input).convert("RGB")
         elif isinstance(image_input, Image.Image):
             image = image_input.convert("RGB")
         else:
-            # Assume numpy array
             image = Image.fromarray(image_input).convert("RGB")
 
         tensor = self.preprocess(image).unsqueeze(0).to(self.device)
@@ -94,4 +98,3 @@ class ObjectRecognizer:
             "top_predictions": predictions,
             "all_scores": all_scores
         }
-
