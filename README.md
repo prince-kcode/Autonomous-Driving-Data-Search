@@ -14,11 +14,10 @@ An end-to-end Autonomous Driving Data Search and Scenario Intelligence platform 
      Real-time perception of environmental conditions (Weather, Time/Lighting, Road Topology), calculation of AV Safety Hazard Index (0-100%), and autonomous driving control recommendations (e.g., headway buffer, traction control, AEB standby).
   3. **Model 3: YOLO Object Detection (YOLOv8)**  
      High-speed spatial bounding-box detection of vehicles, pedestrians, cyclists, and traffic signals with instance counts.
-- **Interactive Web Dashboard**: Streamlit dashboard with 4 specialized studios:
+- **Interactive Web Dashboard**: Streamlit dashboard with 3 specialized studios:
   - 🔍 **Scenario Search & Retrieval**
-  - 🔬 **Live AI Diagnostics (Upload / Select any image)**
-  - 🧠 **Model 1 Training Studio (Loss & Accuracy telemetry)**
-  - 📁 **Dataset & Qdrant Vector Gallery**
+  - 🔬 **Real-Time Vision Telemetry (Live 3-Model Diagnostics)**
+  - 🧠 **Model Training & Benchmark Studio (Loss & Accuracy telemetry)**
 - **Hardware Acceleration**: Automatic GPU acceleration (CUDA on NVIDIA RTX GPUs / MPS on Apple Silicon / CPU fallback).
 - **Embedded or Server Qdrant**: Operates either with a remote Qdrant Docker daemon or fully self-contained using embedded disk storage (`./qdrant_storage`).
 
