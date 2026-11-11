@@ -25,9 +25,10 @@ def run_tests():
     client = get_qdrant_client()
     exists = client.collection_exists(COLLECTION_NAME)
     print(f"  Collection '{COLLECTION_NAME}' exists: {exists}")
-    if exists:
-        pts = client.get_collection(COLLECTION_NAME).points_count
-        print(f"  Indexed Points Count: {pts}")
+    assert exists, f"Qdrant collection '{COLLECTION_NAME}' does not exist! Run populate_db.py first."
+    pts = client.get_collection(COLLECTION_NAME).points_count
+    print(f"  Indexed Points Count: {pts}")
+    assert pts > 0, f"Qdrant collection '{COLLECTION_NAME}' is empty!"
     print("  -> PASSED")
 
     test_img_path = "data/highway_sunny_traffic.jpg"
@@ -61,6 +62,13 @@ def run_tests():
     print(f"  Model Name: {r3['model_name']}")
     print(f"  Detected Entities: {r3['total_objects']}")
     print(f"  Counts: {r3['counts']}")
+    assert r3['total_objects'] > 0, "Expected YOLO to detect vehicles in reference driving frame!"
+
+    # Verify RGB/BGR color ordering regression on data/car.jpg
+    if os.path.exists("data/car.jpg"):
+        car_r = m3.detect("data/car.jpg")
+        print(f"  Car RGB Regression Check: {car_r['counts']}")
+        assert car_r['counts'].get("car", 0) >= 1, f"Expected 'car' detection on data/car.jpg, got {car_r['counts']}"
 
     # Test false positive suppression on forest road with sunlight
     forest_img = "data/foggy_forest_road.jpg"

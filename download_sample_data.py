@@ -5,32 +5,22 @@ DATASET_IMAGES = [
     {
         "filename": "highway_sunny_traffic.jpg",
         "url": "https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=800&q=80",
-        "desc": "Multiple cars cruising on a multi-lane sunny highway"
+        "desc": "Sports sedan cruising on a palm-lined daytime street"
     },
     {
         "filename": "rainy_night_driving.jpg",
         "url": "https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=800&q=80",
-        "desc": "Night driving on wet asphalt with glowing taillights in rain"
-    },
-    {
-        "filename": "pedestrian_crosswalk.jpg",
-        "url": "https://images.unsplash.com/photo-1509114397022-ed747cca3f65?w=800&q=80",
-        "desc": "Pedestrians walking across an urban crosswalk in daylight"
+        "desc": "Night driving on wet city street with cars, bus, and crosswalk"
     },
     {
         "filename": "cyclist_urban_road.jpg",
         "url": "https://images.unsplash.com/photo-1517649763962-0c623266ddc0?w=800&q=80",
-        "desc": "Cyclist riding a bicycle on a city roadway"
-    },
-    {
-        "filename": "traffic_light_intersection.jpg",
-        "url": "https://images.unsplash.com/photo-1508873696983-2df5703bc20d?w=800&q=80",
-        "desc": "Traffic lights at an urban intersection with approaching vehicles"
+        "desc": "Bicycle parked along an urban concrete backdrop"
     },
     {
         "filename": "foggy_rural_highway.jpg",
         "url": "https://images.unsplash.com/photo-1487621167305-5d248087c724?w=800&q=80",
-        "desc": "Dense fog and low visibility conditions on a two-lane highway"
+        "desc": "Dense fog and misty forest low-visibility atmosphere"
     },
     {
         "filename": "city_downtown_traffic.jpg",
@@ -40,17 +30,12 @@ DATASET_IMAGES = [
     {
         "filename": "night_highway_speed.jpg",
         "url": "https://images.unsplash.com/photo-1506521781263-d8422e82f27a?w=800&q=80",
-        "desc": "Night expressway with headlight streaks and fast vehicles"
-    },
-    {
-        "filename": "snowy_winter_driving.jpg",
-        "url": "https://images.unsplash.com/photo-1517030330234-94c4fb948ebc?w=800&q=80",
-        "desc": "Snow-covered winter road with cars navigating icy curves"
+        "desc": "Overhead view of multi-lane roadway and parking lot vehicles"
     },
     {
         "filename": "truck_freeway_transport.jpg",
         "url": "https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?w=800&q=80",
-        "desc": "Heavy cargo truck driving along an interstate highway"
+        "desc": "Heavy cargo truck driving along a rural two-lane highway"
     }
 ]
 

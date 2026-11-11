@@ -1,11 +1,9 @@
 import os
-import sys
 import json
 import time
 from train import train_model
 from train_yolo import train_yolo_model
 from core.scene_analyzer import SceneAnalyzer
-from PIL import Image
 
 def train_all_models(m1_epochs=8, yolo_epochs=3, retrain_m1=False):
     print("=" * 65)
@@ -19,15 +17,15 @@ def train_all_models(m1_epochs=8, yolo_epochs=3, retrain_m1=False):
     print("-" * 60)
     if retrain_m1 or not os.path.exists("models/object_recognizer.pth"):
         m1_history = train_model(epochs=m1_epochs, learning_rate=0.0008)
-        best_m1_acc = m1_history["val_acc"][-1] if m1_history["val_acc"] else 0.0
+        best_m1_acc = max(m1_history["val_acc"]) if m1_history["val_acc"] else 0.0
     else:
         try:
             with open("models/training_history.json", "r") as f:
                 hist = json.load(f)
-            best_m1_acc = hist["val_acc"][-1]
-            print(f"[Model 1] Found existing trained weights! Validation Accuracy: {best_m1_acc}%")
+            best_m1_acc = max(hist["val_acc"]) if hist.get("val_acc") else 0.0
+            print(f"[Model 1] Found existing trained weights! Best Validation Accuracy: {best_m1_acc}%")
         except Exception:
-            best_m1_acc = 99.57
+            best_m1_acc = 0.0
 
     # 2. Calibrate Model 2 (Scenario & Risk Analyzer)
     print("\n" + "-" * 60)

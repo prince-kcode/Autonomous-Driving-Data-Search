@@ -1,10 +1,11 @@
 import os
 import io
+from pathlib import Path
 import torch
 from fastapi import FastAPI, HTTPException, Query, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 from transformers import CLIPProcessor, CLIPModel
 
 from core.device import get_device, get_device_info
@@ -14,6 +15,18 @@ from core.scene_analyzer import SceneAnalyzer
 from core.yolo_detector import YOLODetector
 from populate_db import index_images
 from train import train_model
+
+DATA_DIR = Path("data").resolve()
+
+
+def _resolve_data_file(filename: str) -> str:
+    """Safely resolves a filename strictly within DATA_DIR to block path traversal."""
+    if not filename or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    target = (DATA_DIR / filename).resolve()
+    if not target.is_relative_to(DATA_DIR):
+        raise HTTPException(status_code=400, detail="Invalid filename path")
+    return str(target)
 
 # 1. Hardware device configuration (CUDA > MPS > CPU)
 device = get_device()
@@ -37,8 +50,8 @@ print("[Main] Loading 3 Autonomous Driving AI Models...")
 # Model 1: Recognize Object
 model1_recognizer = ObjectRecognizer()
 
-# Model 2: Analyze Driving Scenario & Risk
-model2_analyzer = SceneAnalyzer()
+# Model 2: Analyze Driving Scenario & Risk (shares initialized CLIP weights)
+model2_analyzer = SceneAnalyzer(clip_model=clip_model, clip_processor=clip_processor)
 
 # Model 3: YOLO Object Detection
 model3_yolo = YOLODetector()
@@ -126,8 +139,12 @@ def search_images(
 
         results = []
         for hit in search_result:
-            filename = hit.payload.get("filename", "Unknown")
-            img_path = os.path.join("data", filename)
+            filename = hit.payload.get("filename", "")
+            img_path = None
+            try:
+                img_path = _resolve_data_file(filename)
+            except HTTPException:
+                img_path = None
 
             item = {
                 "filename": filename,
@@ -137,7 +154,7 @@ def search_images(
             }
 
             # Run 3 models on top results if requested
-            if include_analysis and os.path.exists(img_path):
+            if include_analysis and img_path and os.path.exists(img_path):
                 try:
                     pil_img = Image.open(img_path).convert("RGB")
                     # Model 1
@@ -165,6 +182,14 @@ def search_images(
         )
 
 
+def _open_rgb_image(source, error_detail: str) -> Image.Image:
+    """Opens and converts an image source to RGB, handling Ultralytics' PIL patch safely."""
+    try:
+        return Image.open(source).convert("RGB")
+    except (UnidentifiedImageError, OSError, ModuleNotFoundError, ValueError):
+        raise HTTPException(status_code=400, detail=error_detail)
+
+
 @app.post("/analyze")
 async def analyze_image(
     file: UploadFile = File(None),
@@ -177,12 +202,12 @@ async def analyze_image(
 
     if file is not None:
         contents = await file.read()
-        pil_img = Image.open(io.BytesIO(contents)).convert("RGB")
+        pil_img = _open_rgb_image(io.BytesIO(contents), "Invalid or corrupt uploaded image file")
     elif filename:
-        path = os.path.join("data", filename)
+        path = _resolve_data_file(filename)
         if not os.path.exists(path):
             raise HTTPException(status_code=404, detail=f"Image '{filename}' not found in data/ folder")
-        pil_img = Image.open(path).convert("RGB")
+        pil_img = _open_rgb_image(path, f"Invalid image file: '{filename}'")
     else:
         raise HTTPException(status_code=400, detail="Must provide either an uploaded image file or a filename parameter")
 
@@ -211,12 +236,21 @@ def trigger_index(recreate: bool = False):
     """
     Triggers database re-indexing for images in data/ directory.
     """
-    count = index_images(data_dir="data", recreate_collection=recreate)
+    count = index_images(
+        data_dir="data",
+        recreate_collection=recreate,
+        clip_model=clip_model,
+        clip_processor=clip_processor,
+        client=qdrant_client,
+    )
     return {"message": "Indexing completed", "indexed_images": count}
 
 
 @app.post("/train")
-def trigger_training(epochs: int = 6, learning_rate: float = 0.001):
+def trigger_training(
+    epochs: int = Query(default=8, ge=1, le=50),
+    learning_rate: float = Query(default=0.0008, gt=0.0, le=0.1),
+):
     """
     Retrains Model 1 (Autonomous Object Recognizer) and refreshes loaded weights.
     """
@@ -225,7 +259,7 @@ def trigger_training(epochs: int = 6, learning_rate: float = 0.001):
     model1_recognizer._load_model()
     return {
         "message": "Model 1 training completed successfully!",
-        "best_accuracy": history["val_acc"][-1] if history["val_acc"] else 0,
+        "best_accuracy": max(history["val_acc"]) if history["val_acc"] else 0,
         "epochs_trained": len(history["epochs"])
     }
 
@@ -235,7 +269,7 @@ def get_image(filename: str):
     """
     Serves static scenario images from data/ directory.
     """
-    file_path = os.path.join("data", filename)
+    file_path = _resolve_data_file(filename)
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Image not found")
     return FileResponse(file_path)

@@ -6,26 +6,36 @@ from qdrant_client.models import PointStruct
 from core.device import get_device
 from core.qdrant_manager import get_qdrant_client, init_collection, COLLECTION_NAME
 
-def index_images(data_dir: str = "data", recreate_collection: bool = False):
+def index_images(
+    data_dir: str = "data",
+    recreate_collection: bool = False,
+    clip_model=None,
+    clip_processor=None,
+    client=None,
+):
     """
     Indexes all autonomous driving scenario images from data_dir into Qdrant.
     """
     device = get_device()
     print(f"[PopulateDB] Using compute device: {device}")
 
-    # Load CLIP model & processor
-    model_name = "openai/clip-vit-base-patch32"
-    try:
-        model = CLIPModel.from_pretrained(model_name, local_files_only=True).to(device)
-        processor = CLIPProcessor.from_pretrained(model_name, local_files_only=True)
-    except Exception:
-        model = CLIPModel.from_pretrained(model_name).to(device)
-        processor = CLIPProcessor.from_pretrained(model_name)
-        
+    # Load or reuse CLIP model & processor
+    if clip_model is not None and clip_processor is not None:
+        model = clip_model
+        processor = clip_processor
+    else:
+        model_name = "openai/clip-vit-base-patch32"
+        try:
+            model = CLIPModel.from_pretrained(model_name, local_files_only=True).to(device)
+            processor = CLIPProcessor.from_pretrained(model_name, local_files_only=True)
+        except Exception:
+            model = CLIPModel.from_pretrained(model_name).to(device)
+            processor = CLIPProcessor.from_pretrained(model_name)
+
     model.eval()
 
-    # Initialize Qdrant
-    client = get_qdrant_client()
+    # Initialize or reuse Qdrant
+    client = client if client is not None else get_qdrant_client()
     init_collection(client, collection_name=COLLECTION_NAME, recreate=recreate_collection)
 
     os.makedirs(data_dir, exist_ok=True)
@@ -44,7 +54,9 @@ def index_images(data_dir: str = "data", recreate_collection: bool = False):
     for idx, image_name in enumerate(image_files):
         image_path = os.path.join(data_dir, image_name)
         try:
-            image = Image.open(image_path).convert("RGB")
+            with Image.open(image_path) as raw_img:
+                img_format = raw_img.format or "JPEG"
+                image = raw_img.convert("RGB")
             inputs = processor(images=image, return_tensors="pt").to(device)
 
             with torch.no_grad():
@@ -68,7 +80,7 @@ def index_images(data_dir: str = "data", recreate_collection: bool = False):
                     "title": tag,
                     "width": image.width,
                     "height": image.height,
-                    "format": image.format or "JPEG"
+                    "format": img_format
                 }
             ))
             print(f"  [{idx+1}/{len(image_files)}] Indexed: {image_name} ({image.width}x{image.height})")

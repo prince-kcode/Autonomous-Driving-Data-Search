@@ -1,12 +1,27 @@
 import os
-import time
+import atexit
 from qdrant_client import QdrantClient
-from qdrant_client.models import VectorParams, Distance
+from qdrant_client.models import VectorParams, Distance, Filter, FilterSelector
 
 COLLECTION_NAME = "autonomous_driving_data"
 EMBEDDING_DIM = 512
 
 _CACHED_CLIENT = None
+
+
+def close_qdrant_client():
+    """Closes the cached Qdrant client cleanly before Python interpreter shutdown."""
+    global _CACHED_CLIENT
+    if _CACHED_CLIENT is not None:
+        try:
+            _CACHED_CLIENT.close()
+        except Exception:
+            pass
+        _CACHED_CLIENT = None
+
+
+atexit.register(close_qdrant_client)
+
 
 def get_qdrant_client(host: str = "localhost", port: int = 6333, storage_path: str = "./qdrant_storage") -> QdrantClient:
     """
@@ -25,7 +40,7 @@ def get_qdrant_client(host: str = "localhost", port: int = 6333, storage_path: s
 
     # 1. Try remote Qdrant server
     try:
-        client = QdrantClient(host=host, port=port, timeout=1.5)
+        client = QdrantClient(host=host, port=port, timeout=1.5, check_compatibility=False)
         client.get_collections()
         print(f"[QdrantManager] Connected to remote Qdrant at {host}:{port}")
         _CACHED_CLIENT = client
@@ -56,6 +71,11 @@ def init_collection(client: QdrantClient, collection_name: str = COLLECTION_NAME
     try:
         exists = client.collection_exists(collection_name)
         if recreate and exists:
+            # Purge rows explicitly first: Windows SQLite file locks can prevent delete_collection's rmtree
+            try:
+                client.delete(collection_name, points_selector=FilterSelector(filter=Filter()))
+            except Exception:
+                pass
             client.delete_collection(collection_name)
             exists = False
 

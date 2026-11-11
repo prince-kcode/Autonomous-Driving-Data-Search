@@ -85,6 +85,44 @@ class YOLODetector:
 
         return False, "false_positive_glare", 0.0
 
+    @staticmethod
+    def draw_detections(image_input, detections: list) -> Image.Image:
+        """
+        Draws bounding boxes and color-coded labels onto an image from detection dicts.
+        """
+        if isinstance(image_input, str):
+            image = Image.open(image_input).convert("RGB")
+            annotated_np = np.array(image)
+        elif isinstance(image_input, Image.Image):
+            annotated_np = np.array(image_input.convert("RGB"))
+        else:
+            annotated_np = image_input.copy()
+
+        for det in detections:
+            x1, y1, x2, y2 = [int(v) for v in det["bbox"]]
+            display_name = det["class_name"]
+            conf = det["confidence"]
+
+            color = (0, 230, 80)
+            if "red" in display_name:
+                color = (255, 30, 30)
+            elif "yellow" in display_name:
+                color = (255, 205, 0)
+            elif "green" in display_name:
+                color = (30, 240, 50)
+            elif "car" in display_name or "truck" in display_name or "bus" in display_name:
+                color = (0, 140, 255)
+            elif "person" in display_name:
+                color = (255, 100, 20)
+
+            cv2.rectangle(annotated_np, (x1, y1), (x2, y2), color, 2)
+            label_txt = f"{display_name} {conf:.2f}"
+            (tw, th), _ = cv2.getTextSize(label_txt, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+            cv2.rectangle(annotated_np, (x1, max(0, y1 - th - 6)), (x1 + tw + 4, y1), color, -1)
+            cv2.putText(annotated_np, label_txt, (x1 + 2, max(th, y1 - 4)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+
+        return Image.fromarray(annotated_np)
+
     def detect(self, image_input, conf_threshold: float = 0.30) -> dict:
         """
         Runs YOLO object detection with traffic light color verification
@@ -99,10 +137,16 @@ class YOLODetector:
 
         np_image = np.array(image)
 
-        # Run inference
-        device_arg = str(self.device).split(":")[0] if self.device.type == "cuda" else "cpu"
+        # Pass PIL RGB image directly (Ultralytics treats numpy arrays as BGR)
+        if self.device.type == "cuda":
+            device_arg = 0
+        elif self.device.type == "mps":
+            device_arg = "mps"
+        else:
+            device_arg = "cpu"
+
         results = self.model.predict(
-            source=np_image,
+            source=image,
             conf=conf_threshold,
             device=device_arg,
             verbose=False
@@ -113,8 +157,6 @@ class YOLODetector:
 
         detections = []
         counts = {}
-
-        annotated_np = np_image.copy()
 
         if boxes is not None and len(boxes) > 0:
             for box in boxes:
@@ -152,26 +194,7 @@ class YOLODetector:
                 })
                 counts[display_name] = counts.get(display_name, 0) + 1
 
-                # Draw bounding box and label
-                color = (0, 230, 80)
-                if "red" in display_name:
-                    color = (255, 30, 30)
-                elif "yellow" in display_name:
-                    color = (255, 205, 0)
-                elif "green" in display_name:
-                    color = (30, 240, 50)
-                elif "car" in display_name or "truck" in display_name or "bus" in display_name:
-                    color = (0, 140, 255)
-                elif "person" in display_name:
-                    color = (255, 100, 20)
-
-                cv2.rectangle(annotated_np, (x1, y1), (x2, y2), color, 2)
-                label_txt = f"{display_name} {conf:.2f}"
-                (tw, th), _ = cv2.getTextSize(label_txt, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-                cv2.rectangle(annotated_np, (x1, max(0, y1 - th - 6)), (x1 + tw + 4, y1), color, -1)
-                cv2.putText(annotated_np, label_txt, (x1 + 2, max(th, y1 - 4)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
-
-        annotated_pil = Image.fromarray(annotated_np)
+        annotated_pil = self.draw_detections(np_image, detections)
 
         return {
             "model_name": "YOLO Object Detector (Model 3 - Real-time Perception with Signal Verification)",

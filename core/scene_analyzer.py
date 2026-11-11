@@ -10,14 +10,18 @@ class SceneAnalyzer:
     Evaluates weather, time/lighting, road typology, safety hazard levels,
     and vehicle control recommendations using multimodal vision-language reasoning.
     """
-    def __init__(self, clip_model_name: str = "openai/clip-vit-base-patch32"):
+    def __init__(self, clip_model_name: str = "openai/clip-vit-base-patch32", clip_model=None, clip_processor=None):
         self.device = get_device()
-        try:
-            self.clip_model = CLIPModel.from_pretrained(clip_model_name, local_files_only=True).to(self.device)
-            self.clip_processor = CLIPProcessor.from_pretrained(clip_model_name, local_files_only=True)
-        except Exception:
-            self.clip_model = CLIPModel.from_pretrained(clip_model_name).to(self.device)
-            self.clip_processor = CLIPProcessor.from_pretrained(clip_model_name)
+        if clip_model is not None and clip_processor is not None:
+            self.clip_model = clip_model
+            self.clip_processor = clip_processor
+        else:
+            try:
+                self.clip_model = CLIPModel.from_pretrained(clip_model_name, local_files_only=True).to(self.device)
+                self.clip_processor = CLIPProcessor.from_pretrained(clip_model_name, local_files_only=True)
+            except Exception:
+                self.clip_model = CLIPModel.from_pretrained(clip_model_name).to(self.device)
+                self.clip_processor = CLIPProcessor.from_pretrained(clip_model_name)
         self.clip_model.eval()
 
         # Attribute definitions
@@ -58,7 +62,8 @@ class SceneAnalyzer:
             text=texts,
             images=image,
             return_tensors="pt",
-            padding=True
+            padding=True,
+            truncation=True
         ).to(self.device)
 
         with torch.no_grad():
@@ -130,6 +135,13 @@ class SceneAnalyzer:
         elif "Expressway" in road_label:
             action_recommendations.append("Standard Highway Autopilot (Level 3 ADAS) permitted up to 100 km/h")
 
+        if "Critical Hazard" in hazard_label and hazard_conf >= 0.45:
+            risk_score += 25
+            risk_factors.append(f"CLIP multimodal perception flagged critical hazard ({round(hazard_conf * 100, 1)}% confidence)")
+        elif "High Hazard" in hazard_label and hazard_conf >= 0.45:
+            risk_score += 15
+            risk_factors.append(f"CLIP multimodal perception flagged elevated hazard ({round(hazard_conf * 100, 1)}% confidence)")
+
         if not action_recommendations:
             action_recommendations.append("Normal autonomous cruise operational (target: 65 km/h, headway: 2.0s)")
 
@@ -176,6 +188,10 @@ class SceneAnalyzer:
                 "level": hazard_level,
                 "color": hazard_color,
                 "risk_score_pct": risk_score,
+                "visual_hazard_signal": {
+                    "detected": hazard_label,
+                    "confidence": hazard_conf
+                },
                 "risk_factors": risk_factors if risk_factors else ["Optimal driving conditions detected"],
                 "av_recommendations": action_recommendations
             },

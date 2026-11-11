@@ -134,7 +134,7 @@ def get_local_fallback_engines():
             "clip_model": clip_model,
             "clip_proc": clip_proc,
             "m1": ObjectRecognizer(),
-            "m2": SceneAnalyzer(),
+            "m2": SceneAnalyzer(clip_model=clip_model, clip_processor=clip_proc),
             "m3": YOLODetector()
         }
     except Exception as e:
@@ -151,7 +151,7 @@ with st.sidebar:
         dev_label = compute.get("device", "cuda").upper()
         gpu_label = compute.get("gpu_name", "NVIDIA RTX Acceleration")
         st.caption(f"Compute Engine: **{dev_label}** ({gpu_label})")
-        st.caption(f"Indexed Vectors: **{backend_info.get('indexed_images', 26)} scenarios**")
+        st.caption(f"Indexed Vectors: **{backend_info.get('indexed_images', 0)} scenarios**")
     else:
         st.markdown('<span class="hud-badge hud-badge-cyan">● EMBEDDED LOCAL ENGINE</span>', unsafe_allow_html=True)
         st.caption("Active in standalone direct-inference mode.")
@@ -189,33 +189,33 @@ with tab1:
     st.markdown("**Quick Preset Queries:**")
     p1, p2, p3, p4 = st.columns(4)
     preset_query = None
-    if p1.button("🌧️ Rainy Night Highway"):
-        preset_query = "a photo of a car driving on a rainy road at night with glowing taillights"
-    if p2.button("🚶 Urban Crosswalk"):
-        preset_query = "pedestrians crossing the street at an urban crosswalk in daylight"
-    if p3.button("🚌 School Bus on Road"):
-        preset_query = "large yellow bus driving along roadway"
-    if p4.button("🚦 Traffic Light Signal"):
-        preset_query = "traffic light at a city street intersection with cars"
+    if p1.button("🌧️ Rainy Night Intersection"):
+        preset_query = "wet city street at night with cars, bus, and crosswalk"
+    if p2.button("🚑 Emergency Ambulance"):
+        preset_query = "emergency ambulance vehicle on a city street"
+    if p3.button("🚌 Coach Bus on Road"):
+        preset_query = "large passenger bus driving on roadway"
+    if p4.button("🚚 Highway Cargo Truck"):
+        preset_query = "heavy semi cargo truck driving along highway"
 
     p5, p6, p7, p8 = st.columns(4)
-    if p5.button("🚧 Road Hazard & Barrier"):
-        preset_query = "road construction zone with orange cones and barrier hazard"
-    if p6.button("🏍️ Highway Motorcycle"):
-        preset_query = "motorcycle driving on an open expressway lane"
-    if p7.button("🌫️ Dense Fog Highway"):
-        preset_query = "dense fog and misty low visibility conditions on a mountain road"
-    if p8.button("❄️ Snow Blizzard Road"):
-        preset_query = "snow covered icy winter road with trucks"
+    if p5.button("🏎️ Sports Car Highway"):
+        preset_query = "sports car cruising along an open highway road"
+    if p6.button("🏍️ Motorcycle Lane"):
+        preset_query = "sport motorcycle beside concrete wall"
+    if p7.button("🌲 Forest Sunlight Glare"):
+        preset_query = "misty pine forest with bright sunlight glare"
+    if p8.button("🚲 Bicycle Roadside"):
+        preset_query = "bicycle parked near urban street wall"
 
     c_query, c_limit = st.columns([4, 1])
     with c_query:
-        default_q = preset_query if preset_query else "a red sports car cruising on the road"
+        default_q = preset_query if preset_query else "a sports car cruising on the highway"
         query_input = st.text_input("Enter Natural Language Scenario Description:", value=default_q)
     with c_limit:
         limit = st.slider("Result Limit", min_value=1, max_value=8, value=3)
 
-    search_clicked = st.button("🚀 Search Scenarios", type="primary", use_container_width=True)
+    search_clicked = st.button("🚀 Search Scenarios", type="primary", width="stretch")
 
     if search_clicked or preset_query:
         query_to_run = query_input.strip()
@@ -287,7 +287,7 @@ with tab1:
                 with cols[0]:
                     st.subheader(f"#{idx+1}: {item.get('title', item['filename'])}")
                     if os.path.exists(img_path):
-                        st.image(img_path, use_container_width=True)
+                        st.image(img_path, width="stretch")
                     st.metric(label="Vector Cosine Match", value=f"{item['score']:.4f}")
 
                 with cols[1]:
@@ -352,14 +352,16 @@ with tab2:
     with col_sample:
         demo_presets = [
             "None",
-            "Sunny Highway Traffic (highway_sunny_traffic.jpg)",
-            "Rainy Night Driving (rainy_night_driving.jpg)",
-            "Pedestrian Crosswalk (pedestrian_crosswalk.jpg)",
+            "Sunny Highway Car (highway_sunny_traffic.jpg)",
+            "Rainy Night Intersection (rainy_night_driving.jpg)",
+            "White Sports Car Road (car.jpg)",
+            "Highway Porsche Speed (red_sports_car_road.jpg)",
             "Forest Road Sunlight (foggy_forest_road.jpg)",
-            "Traffic Light Intersection (traffic_light_intersection.jpg)",
-            "School Bus on Road (school_bus_suburban.jpg)",
-            "Highway Motorcycle (motorcycle_highway_lane.jpg)",
-            "Snow Blizzard Driving (snow_blizzard_truck.jpg)"
+            "Emergency Ambulance (emergency_ambulance_road.jpg)",
+            "Passenger Coach Bus (school_bus_suburban.jpg)",
+            "Highway Cargo Semi-Truck (truck_freeway_transport.jpg)",
+            "Sport Motorcycle Lane (motorcycle_highway_lane.jpg)",
+            "Roadside Bicycle (cyclist_urban_road.jpg)"
         ]
         chosen_sample = st.selectbox("Or select a demo test scenario:", demo_presets)
 
@@ -367,7 +369,10 @@ with tab2:
     target_filename = None
 
     if uploaded_file is not None:
-        target_image = Image.open(uploaded_file).convert("RGB")
+        try:
+            target_image = Image.open(uploaded_file).convert("RGB")
+        except Exception as img_err:
+            st.error(f"Could not read uploaded image: {img_err}")
     elif chosen_sample != "None":
         fname = chosen_sample.split("(")[-1].replace(")", "").strip()
         fpath = os.path.join("data", fname)
@@ -383,15 +388,36 @@ with tab2:
             with st.spinner("Processing frame across Model 1 (Deep CNN), Model 2 (CLIP), and Model 3 (YOLO)..."):
                 m1_res, m2_res, m3_res = None, None, None
 
-                # Route via backend if online
-                if backend_online and target_filename:
+                # Route both sample and uploaded frames via backend when online
+                if backend_online:
                     try:
-                        res = requests.post(f"{FASTAPI_URL}/analyze", params={"filename": target_filename}, timeout=30).json()
-                        m1_res = res["model_1_recognition"]
-                        m2_res = res["model_2_analysis"]
-                        from core.yolo_detector import YOLODetector
-                        m3_detector = YOLODetector()
-                        m3_res = m3_detector.detect(target_image)
+                        if uploaded_file is not None:
+                            img_bytes = io.BytesIO()
+                            target_image.save(img_bytes, format="JPEG")
+                            img_bytes.seek(0)
+                            resp = requests.post(
+                                f"{FASTAPI_URL}/analyze",
+                                files={"file": (uploaded_file.name, img_bytes, "image/jpeg")},
+                                timeout=30
+                            )
+                        else:
+                            resp = requests.post(
+                                f"{FASTAPI_URL}/analyze",
+                                params={"filename": target_filename},
+                                timeout=30
+                            )
+                        if resp.status_code == 200:
+                            res = resp.json()
+                            m1_res = res["model_1_recognition"]
+                            m2_res = res["model_2_analysis"]
+                            m3_yolo = res["model_3_yolo"]
+                            from core.yolo_detector import YOLODetector
+                            m3_res = {
+                                "annotated_image": YOLODetector.draw_detections(target_image, m3_yolo["detections"]),
+                                "total_objects": m3_yolo["total_objects"],
+                                "counts": m3_yolo["counts"],
+                                "detections": m3_yolo["detections"]
+                            }
                     except Exception:
                         pass
 
@@ -407,7 +433,7 @@ with tab2:
 
                     with c_left:
                         st.markdown("#### 1️⃣ Model 1: Object Recognizer")
-                        st.image(target_image, caption="Input Frame", use_container_width=True)
+                        st.image(target_image, caption="Input Frame", width="stretch")
                         
                         top_cls = m1_res['primary_object']
                         badge_c = "hud-badge-cyan"
@@ -450,10 +476,10 @@ with tab2:
 
                     with c_right:
                         st.markdown("#### 3️⃣ Model 3: YOLO Object Detection")
-                        st.image(m3_res["annotated_image"], caption="YOLOv8 Bounding Boxes", use_container_width=True)
+                        st.image(m3_res["annotated_image"], caption="YOLOv8 Bounding Boxes", width="stretch")
                         st.info(f"**Detected Entities:** {m3_res['total_objects']}")
                         if m3_res["counts"]:
-                            st.dataframe(pd.DataFrame(list(m3_res["counts"].items()), columns=["Detected Class", "Count"]), use_container_width=True)
+                            st.dataframe(pd.DataFrame(list(m3_res["counts"].items()), columns=["Detected Class", "Count"]), width="stretch")
 
 
 # ----------------- TAB 3: Model Training Studio -----------------
@@ -461,13 +487,31 @@ with tab3:
     st.markdown("### 🧠 AI Model Training & Benchmark Telemetry Studio")
     st.write("Inspect performance curves, test benchmark accuracies, and retrain models on GPU.")
 
+    history_file = "models/training_history.json"
+    hist_data = None
+    best_val_display = "N/A"
+    num_classes_display = 11
+    total_samples_display = "1,800+"
+    if os.path.exists(history_file):
+        try:
+            with open(history_file, "r") as f:
+                hist_data = json.load(f)
+            if hist_data.get("val_acc"):
+                best_val_display = f"{max(hist_data['val_acc']):.2f}%"
+            if hist_data.get("classes"):
+                num_classes_display = len(hist_data["classes"])
+            if hist_data.get("total_samples"):
+                total_samples_display = f"{hist_data['total_samples']:,}"
+        except Exception:
+            hist_data = None
+
     col_m1, col_m2, col_m3 = st.columns(3)
     with col_m1:
         st.markdown("#### 1️⃣ Model 1: Object Recognizer")
-        st.markdown("""
+        st.markdown(f"""
         - **Architecture**: MobileNetV3 Deep CNN
-        - **Classes**: 11 AV Categories *(Red, Yellow, Green signals + Glare Negative)*
-        - **Val Accuracy**: **100.00%**
+        - **Classes**: {num_classes_display} AV Categories *(Red, Yellow, Green signals + Glare Negative)*
+        - **Best Val Accuracy**: **{best_val_display}**
         - **Weights**: `models/object_recognizer.pth`
         """)
     with col_m2:
@@ -489,30 +533,49 @@ with tab3:
     st.markdown("---")
     c_btn1, c_btn2 = st.columns([1, 1])
     with c_btn1:
-        retrain_m1_btn = st.button("🎯 Retrain Model 1 (Deep CNN)", use_container_width=True)
+        retrain_m1_btn = st.button("🎯 Retrain Model 1 (Deep CNN)", width="stretch")
     with c_btn2:
-        retrain_all_btn = st.button("🚀 Train / Verify All 3 Models", type="primary", use_container_width=True)
+        retrain_all_btn = st.button("🚀 Train / Verify All 3 Models", type="primary", width="stretch")
 
     if retrain_m1_btn:
-        with st.spinner("Retraining Model 1 on 1,800+ samples on GPU..."):
-            from train import train_model
-            h = train_model(epochs=8, learning_rate=0.0008)
-            st.success(f"🎉 Model 1 training complete! Best Accuracy: {h['val_acc'][-1]}%")
-            st.rerun()
+        with st.spinner(f"Retraining Model 1 on {total_samples_display} samples on GPU..."):
+            if backend_online:
+                resp = requests.post(
+                    f"{FASTAPI_URL}/train",
+                    params={"epochs": 8, "learning_rate": 0.0008},
+                    timeout=300
+                )
+                if resp.status_code == 200:
+                    res = resp.json()
+                    get_local_fallback_engines.clear()
+                    st.success(f"🎉 Model 1 training complete & reloaded on backend! Best Accuracy: {res['best_accuracy']}%")
+                    st.rerun()
+                else:
+                    st.error(f"Backend training failed: {resp.text}")
+            else:
+                from train import train_model
+                h = train_model(epochs=8, learning_rate=0.0008)
+                get_local_fallback_engines.clear()
+                best_acc = max(h["val_acc"]) if h.get("val_acc") else 0
+                st.success(f"🎉 Model 1 training complete! Best Accuracy: {best_acc}%")
+                st.rerun()
 
     if retrain_all_btn:
         with st.spinner("Training and verifying all 3 models on GPU..."):
             from train_all import train_all_models
             summary = train_all_models(m1_epochs=8, yolo_epochs=3, retrain_m1=True)
+            get_local_fallback_engines.clear()
+            if backend_online:
+                try:
+                    requests.post(f"{FASTAPI_URL}/train", params={"epochs": 1, "learning_rate": 0.0001}, timeout=120)
+                except Exception:
+                    pass
             st.success("🎉 All 3 models trained and verified successfully!")
             st.json(summary)
 
     # Performance curves
-    history_file = "models/training_history.json"
-    if os.path.exists(history_file):
+    if hist_data:
         try:
-            with open(history_file, "r") as f:
-                hist_data = json.load(f)
             st.markdown("#### 📈 Model 1 Training Performance Curves")
             c_c1, c_c2 = st.columns(2)
             df_metrics = pd.DataFrame({

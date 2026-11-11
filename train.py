@@ -54,15 +54,32 @@ class AutonomousDrivingNet(nn.Module):
         return self.backbone(x)
 
 
+class _TransformSubset(Dataset):
+    """Applies a specific transform pipeline to a split list of (PIL.Image, label) pairs."""
+    def __init__(self, samples, transform=None):
+        self.samples = samples
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        img, label = self.samples[idx]
+        if self.transform:
+            img = self.transform(img)
+        return img, label
+
+
 class AutonomousDrivingDataset(Dataset):
     """
     Compiles an autonomous driving training dataset with:
     - Dedicated primary signal states: Red, Yellow/Amber, and Green traffic lights.
     - Explicit negative samples for Sunlight Glare, Tree Foliage & Forest Roads.
-    - Multi-scale crops from real autonomous driving scenarios.
+    - Multi-scale crops from verified autonomous driving scenarios (split safely to avoid leakage).
     """
     def __init__(self, data_dir="data", samples_per_class=160, transform=None):
         self.samples = []
+        self.real_crop_groups = {}
         self.transform = transform
         self.data_dir = data_dir
         self.samples_per_class = samples_per_class
@@ -187,27 +204,29 @@ class AutonomousDrivingDataset(Dataset):
                 img = self._generate_synthetic_sample(class_idx)
                 self.samples.append((img, class_idx))
 
-        # 2. Extract crops from real dataset images
+        # 2. Extract crops from real dataset images (strictly mapped, no random traffic-light or blind fallback)
         if os.path.exists(self.data_dir):
-            real_files = [f for f in os.listdir(self.data_dir) if f.lower().endswith(('.jpg', '.png', '.jpeg'))]
+            real_files = sorted([
+                f for f in os.listdir(self.data_dir)
+                if f.lower().endswith(('.jpg', '.png', '.jpeg'))
+            ])
             for rf in real_files:
                 try:
-                    img_path = os.path.join(self.data_dir, rf)
-                    real_img = Image.open(img_path).convert("RGB")
-                    w, h = real_img.size
-                    
                     rf_lower = rf.lower()
-                    c_idx = 0
+                    c_idx = None
                     if any(k in rf_lower for k in ["pedestrian", "person", "crosswalk"]):
                         c_idx = 1
                     elif any(k in rf_lower for k in ["cyclist", "bicycle", "bike"]):
                         c_idx = 2
-                    elif "traffic_light" in rf_lower:
-                        # Real traffic lights
-                        c_idx = random.choice([3, 4, 5])
-                    elif any(k in rf_lower for k in ["stop_sign", "sign"]):
+                    elif any(k in rf_lower for k in ["red_light", "traffic_light_red"]):
+                        c_idx = 3
+                    elif any(k in rf_lower for k in ["yellow_light", "amber_light", "traffic_light_yellow"]):
+                        c_idx = 4
+                    elif any(k in rf_lower for k in ["green_light", "traffic_light_green"]):
+                        c_idx = 5
+                    elif any(k in rf_lower for k in ["stop_sign", "speed_sign"]):
                         c_idx = 6
-                    elif any(k in rf_lower for k in ["truck", "bus"]):
+                    elif any(k in rf_lower for k in ["truck", "bus", "ambulance"]):
                         c_idx = 7
                     elif any(k in rf_lower for k in ["motorcycle", "scooter"]):
                         c_idx = 8
@@ -216,14 +235,27 @@ class AutonomousDrivingDataset(Dataset):
                     elif any(k in rf_lower for k in ["forest", "foggy_rural", "sunset"]):
                         # Nature / sunlight glare negative class
                         c_idx = 10
+                    elif any(k in rf_lower for k in ["car", "highway_sunny", "city_downtown", "rainy_night", "night_highway", "electric_vehicle"]):
+                        c_idx = 0
 
+                    if c_idx is None:
+                        continue
+
+                    img_path = os.path.join(self.data_dir, rf)
+                    with Image.open(img_path) as raw_img:
+                        real_img = raw_img.convert("RGB")
+                    w, h = real_img.size
+
+                    crops = []
                     for _ in range(4):
                         crop_w = int(w * random.uniform(0.45, 0.85))
                         crop_h = int(h * random.uniform(0.45, 0.85))
                         x1 = random.randint(0, max(0, w - crop_w))
                         y1 = random.randint(0, max(0, h - crop_h))
                         crop = real_img.crop((x1, y1, x1 + crop_w, y1 + crop_h)).resize((224, 224))
-                        self.samples.append((crop, c_idx))
+                        crops.append((crop, c_idx))
+                    self.real_crop_groups[rf] = crops
+                    self.samples.extend(crops)
                 except Exception:
                     pass
 
@@ -271,10 +303,33 @@ def train_model(
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
-    full_dataset = AutonomousDrivingDataset(samples_per_class=160, transform=train_transform)
-    train_size = int(0.85 * len(full_dataset))
-    val_size = len(full_dataset) - train_size
-    train_set, val_set = torch.utils.data.random_split(full_dataset, [train_size, val_size])
+    full_dataset = AutonomousDrivingDataset(samples_per_class=160, transform=None)
+
+    # Hold out whole real-image crop groups cleanly so sibling crops never leak into val
+    real_files = list(full_dataset.real_crop_groups.keys())
+    random.shuffle(real_files)
+    val_file_count = max(1, int(0.15 * len(real_files))) if real_files else 0
+    val_real_files = set(real_files[:val_file_count])
+
+    train_samples, val_samples = [], []
+    real_sample_ids = set()
+    for rf, crops in full_dataset.real_crop_groups.items():
+        for pair in crops:
+            real_sample_ids.add(id(pair))
+        if rf in val_real_files:
+            val_samples.extend(crops)
+        else:
+            train_samples.extend(crops)
+
+    synth_only = [s for s in full_dataset.samples if id(s) not in real_sample_ids]
+    random.shuffle(synth_only)
+    synth_split = int(0.85 * len(synth_only))
+    train_samples.extend(synth_only[:synth_split])
+    val_samples.extend(synth_only[synth_split:])
+    random.shuffle(train_samples)
+
+    train_set = _TransformSubset(train_samples, transform=train_transform)
+    val_set = _TransformSubset(val_samples, transform=val_transform)
 
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, drop_last=True)
     val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False)

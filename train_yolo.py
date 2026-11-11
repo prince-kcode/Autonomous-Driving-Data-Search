@@ -40,25 +40,38 @@ def prepare_yolo_dataset(dataset_dir="yolo_data", num_train=60, num_val=15):
             cls_id = random.choice([0, 0, 1, 3, 4, 5])
             bw = random.randint(70, 140)
             bh = random.randint(60, 110) if cls_id != 1 else random.randint(90, 150)
-            bx = random.randint(100, 540 - bw)
-            by = random.randint(320, 600 - bh)
 
+            # Use exact drawn dimensions for both rendering and bounding-box ground truth
             if cls_id == 0:  # car
-                draw.rectangle([bx, by, bx + bw, by + bh], fill=(random.randint(180, 240), 30, 30))
+                obj_w, obj_h = bw, bh
             elif cls_id == 1:  # pedestrian
-                draw.rectangle([bx, by, bx + bw//2, by + bh], fill=(40, 80, 200))
+                obj_w, obj_h = bw // 2, bh
             elif cls_id == 3:  # traffic light
-                draw.rectangle([bx, by, bx + 35, by + 80], fill=(20, 20, 20))
+                obj_w, obj_h = 35, 80
             elif cls_id == 5:  # truck
-                draw.rectangle([bx, by, bx + bw + 40, by + bh], fill=(220, 140, 30))
+                obj_w, obj_h = bw + 40, bh
             else:
-                draw.rectangle([bx, by, bx + 40, by + 40], fill=(200, 200, 200))
+                obj_w, obj_h = 40, 40
+
+            bx = random.randint(80, max(80, w - 80 - obj_w))
+            by = random.randint(320, max(320, h - 20 - obj_h))
+
+            if cls_id == 0:
+                draw.rectangle([bx, by, bx + obj_w, by + obj_h], fill=(random.randint(180, 240), 30, 30))
+            elif cls_id == 1:
+                draw.rectangle([bx, by, bx + obj_w, by + obj_h], fill=(40, 80, 200))
+            elif cls_id == 3:
+                draw.rectangle([bx, by, bx + obj_w, by + obj_h], fill=(20, 20, 20))
+            elif cls_id == 5:
+                draw.rectangle([bx, by, bx + obj_w, by + obj_h], fill=(220, 140, 30))
+            else:
+                draw.rectangle([bx, by, bx + obj_w, by + obj_h], fill=(200, 200, 200))
 
             # YOLO format: cls_id x_center y_center width height (normalized 0-1)
-            xc = (bx + bw / 2) / w
-            yc = (by + bh / 2) / h
-            nw = bw / w
-            nh = bh / h
+            xc = (bx + obj_w / 2) / w
+            yc = (by + obj_h / 2) / h
+            nw = obj_w / w
+            nh = obj_h / h
             labels.append(f"{cls_id} {xc:.6f} {yc:.6f} {nw:.6f} {nh:.6f}")
 
         img_path = os.path.join(dataset_dir, "images", split, f"scene_{idx:04d}.jpg")
