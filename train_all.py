@@ -5,7 +5,7 @@ from train import train_model
 from train_yolo import train_yolo_model
 from core.scene_analyzer import SceneAnalyzer
 
-def train_all_models(m1_epochs=8, yolo_epochs=3, retrain_m1=False):
+def train_all_models(m1_epochs=10, yolo_epochs=3, retrain_m1=True, retrain_yolo=False):
     print("=" * 65)
     print("       TRAINING & CALIBRATING ALL 3 AUTONOMOUS DRIVING AI MODELS")
     print("=" * 65)
@@ -49,15 +49,15 @@ def train_all_models(m1_epochs=8, yolo_epochs=3, retrain_m1=False):
     print(f"   Hazard Distribution: {scenario_stats['hazard']}")
     print(f"   Weather Distribution: {scenario_stats['weather']}\n")
 
-    # 3. Model 3 (YOLO Object Detector)
+    # 3. Model 3 (YOLO11 Object Detector)
     print("-" * 60)
-    print("[3/3] MODEL 3: YOLO OBJECT DETECTOR (YOLOv8)")
+    print("[3/3] MODEL 3: YOLO11 OBJECT DETECTOR (YOLO11)")
     print("-" * 60)
-    if not os.path.exists("models/yolov8_autodrive.pt"):
-        yolo_model_path = train_yolo_model(epochs=yolo_epochs)
+    yolo_model_path = "models/yolo11_autodrive.pt"
+    if retrain_yolo or not os.path.exists(yolo_model_path):
+        yolo_model_path = train_yolo_model(epochs=yolo_epochs, output_model=yolo_model_path)
     else:
-        yolo_model_path = "models/yolov8_autodrive.pt"
-        print(f"[Model 3] Trained YOLO weights active at '{yolo_model_path}'.")
+        print(f"[Model 3] Trained YOLO11 weights active at '{yolo_model_path}'.")
 
     elapsed = round(time.time() - start_time, 2)
     print("\n" + "=" * 65)
@@ -78,7 +78,7 @@ def train_all_models(m1_epochs=8, yolo_epochs=3, retrain_m1=False):
             "distribution": scenario_stats
         },
         "model_3": {
-            "name": "YOLO Object Detector (Fine-Tuned YOLOv8)",
+            "name": "YOLO11 Object Detector (Fine-Tuned YOLO11)",
             "weights": yolo_model_path
         }
     }

@@ -93,5 +93,8 @@ def index_images(
         return len(points)
     return 0
 
+
+populate_qdrant = index_images
+
 if __name__ == "__main__":
     index_images(recreate_collection=True)

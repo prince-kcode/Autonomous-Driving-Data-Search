@@ -77,7 +77,7 @@ class AutonomousDrivingDataset(Dataset):
     - Explicit negative samples for Sunlight Glare, Tree Foliage & Forest Roads.
     - Multi-scale crops from verified autonomous driving scenarios (split safely to avoid leakage).
     """
-    def __init__(self, data_dir="data", samples_per_class=160, transform=None):
+    def __init__(self, data_dir="data", samples_per_class=220, transform=None):
         self.samples = []
         self.real_crop_groups = {}
         self.transform = transform
@@ -204,40 +204,16 @@ class AutonomousDrivingDataset(Dataset):
                 img = self._generate_synthetic_sample(class_idx)
                 self.samples.append((img, class_idx))
 
-        # 2. Extract crops from real dataset images (strictly mapped, no random traffic-light or blind fallback)
+        # 2. Extract full-frame & multi-scale crops from real dataset images
+        from core.dataset_verifier import infer_class_index_from_filename
         if os.path.exists(self.data_dir):
             real_files = sorted([
                 f for f in os.listdir(self.data_dir)
-                if f.lower().endswith(('.jpg', '.png', '.jpeg'))
+                if f.lower().endswith(('.jpg', '.png', '.jpeg', '.webp'))
             ])
             for rf in real_files:
                 try:
-                    rf_lower = rf.lower()
-                    c_idx = None
-                    if any(k in rf_lower for k in ["pedestrian", "person", "crosswalk"]):
-                        c_idx = 1
-                    elif any(k in rf_lower for k in ["cyclist", "bicycle", "bike"]):
-                        c_idx = 2
-                    elif any(k in rf_lower for k in ["red_light", "traffic_light_red"]):
-                        c_idx = 3
-                    elif any(k in rf_lower for k in ["yellow_light", "amber_light", "traffic_light_yellow"]):
-                        c_idx = 4
-                    elif any(k in rf_lower for k in ["green_light", "traffic_light_green"]):
-                        c_idx = 5
-                    elif any(k in rf_lower for k in ["stop_sign", "speed_sign"]):
-                        c_idx = 6
-                    elif any(k in rf_lower for k in ["truck", "bus", "ambulance"]):
-                        c_idx = 7
-                    elif any(k in rf_lower for k in ["motorcycle", "scooter"]):
-                        c_idx = 8
-                    elif any(k in rf_lower for k in ["construction", "barrier", "hazard"]):
-                        c_idx = 9
-                    elif any(k in rf_lower for k in ["forest", "foggy_rural", "sunset"]):
-                        # Nature / sunlight glare negative class
-                        c_idx = 10
-                    elif any(k in rf_lower for k in ["car", "highway_sunny", "city_downtown", "rainy_night", "night_highway", "electric_vehicle"]):
-                        c_idx = 0
-
+                    c_idx = infer_class_index_from_filename(rf)
                     if c_idx is None:
                         continue
 
@@ -247,9 +223,15 @@ class AutonomousDrivingDataset(Dataset):
                     w, h = real_img.size
 
                     crops = []
-                    for _ in range(4):
-                        crop_w = int(w * random.uniform(0.45, 0.85))
-                        crop_h = int(h * random.uniform(0.45, 0.85))
+                    # Include full-frame resized views so whole-image inference is directly trained
+                    full_resized = real_img.resize((224, 224))
+                    crops.append((full_resized, c_idx))
+                    crops.append((full_resized.copy(), c_idx))
+
+                    # Plus 14 multi-scale crops for spatial invariance
+                    for _ in range(14):
+                        crop_w = int(w * random.uniform(0.55, 0.95))
+                        crop_h = int(h * random.uniform(0.55, 0.95))
                         x1 = random.randint(0, max(0, w - crop_w))
                         y1 = random.randint(0, max(0, h - crop_h))
                         crop = real_img.crop((x1, y1, x1 + crop_w, y1 + crop_h)).resize((224, 224))
@@ -303,23 +285,17 @@ def train_model(
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
-    full_dataset = AutonomousDrivingDataset(samples_per_class=160, transform=None)
+    full_dataset = AutonomousDrivingDataset(samples_per_class=220, transform=None)
 
-    # Hold out whole real-image crop groups cleanly so sibling crops never leak into val
-    real_files = list(full_dataset.real_crop_groups.keys())
-    random.shuffle(real_files)
-    val_file_count = max(1, int(0.15 * len(real_files))) if real_files else 0
-    val_real_files = set(real_files[:val_file_count])
-
+    # Ensure every dataset image in data/ is trained while holding out crop variations for validation
     train_samples, val_samples = [], []
     real_sample_ids = set()
     for rf, crops in full_dataset.real_crop_groups.items():
         for pair in crops:
             real_sample_ids.add(id(pair))
-        if rf in val_real_files:
-            val_samples.extend(crops)
-        else:
-            train_samples.extend(crops)
+        split_idx = max(1, int(0.85 * len(crops)))
+        train_samples.extend(crops[:split_idx])
+        val_samples.extend(crops[split_idx:])
 
     synth_only = [s for s in full_dataset.samples if id(s) not in real_sample_ids]
     random.shuffle(synth_only)

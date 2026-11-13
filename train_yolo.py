@@ -16,7 +16,7 @@ YOLO_CLASSES = [
     "motorcycle"
 ]
 
-def prepare_yolo_dataset(dataset_dir="yolo_data", num_train=60, num_val=15):
+def prepare_yolo_dataset(dataset_dir="yolo_data", num_train=80, num_val=20):
     """
     Creates an autonomous driving dataset in YOLO format with bounding box annotations.
     """
@@ -102,9 +102,9 @@ def prepare_yolo_dataset(dataset_dir="yolo_data", num_train=60, num_val=15):
     return yaml_path
 
 
-def train_yolo_model(epochs=3, batch=8, imgsz=640, output_model="models/yolov8_autodrive.pt"):
+def train_yolo_model(epochs=3, batch=8, imgsz=640, output_model="models/yolo11_autodrive.pt"):
     """
-    Trains / fine-tunes YOLO for autonomous driving detection.
+    Trains / fine-tunes YOLO11 for autonomous driving detection.
     """
     os.makedirs(os.path.dirname(output_model), exist_ok=True)
     runs_dir = os.path.abspath("runs")
@@ -120,8 +120,9 @@ def train_yolo_model(epochs=3, batch=8, imgsz=640, output_model="models/yolov8_a
     dev = get_device()
     device_arg = 0 if dev.type == "cuda" else "cpu"
 
-    print(f"[YOLO Training] Fine-tuning YOLOv8 on autonomous driving dataset using device: {dev}...")
-    model = YOLO("yolov8n.pt")
+    print(f"[YOLO Training] Fine-tuning YOLO11 on autonomous driving dataset using device: {dev}...")
+    base_weights = "yolo11n.pt" if os.path.exists("yolo11n.pt") else "yolo11n.pt"
+    model = YOLO(base_weights)
     results = model.train(
         data=yaml_path,
         epochs=epochs,
@@ -129,18 +130,18 @@ def train_yolo_model(epochs=3, batch=8, imgsz=640, output_model="models/yolov8_a
         imgsz=imgsz,
         device=device_arg,
         project=runs_dir,
-        name="autodrive",
+        name="autodrive_yolo11",
         exist_ok=True,
         verbose=False
     )
 
-    best_weights = os.path.join(runs_dir, "autodrive", "weights", "best.pt")
+    best_weights = os.path.join(runs_dir, "autodrive_yolo11", "weights", "best.pt")
     if os.path.exists(best_weights):
         shutil.copy(best_weights, output_model)
-        print(f"[YOLO Training] Successfully saved fine-tuned YOLO model to '{output_model}'!")
+        print(f"[YOLO Training] Successfully saved fine-tuned YOLO11 model to '{output_model}'!")
     else:
-        shutil.copy("yolov8n.pt", output_model)
-        print(f"[YOLO Training] Saved trained YOLO model to '{output_model}'.")
+        shutil.copy(base_weights, output_model)
+        print(f"[YOLO Training] Saved trained YOLO11 model to '{output_model}'.")
 
     return output_model
 

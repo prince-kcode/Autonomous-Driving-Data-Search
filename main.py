@@ -53,15 +53,15 @@ model1_recognizer = ObjectRecognizer()
 # Model 2: Analyze Driving Scenario & Risk (shares initialized CLIP weights)
 model2_analyzer = SceneAnalyzer(clip_model=clip_model, clip_processor=clip_processor)
 
-# Model 3: YOLO Object Detection
+# Model 3: YOLO11 Object Detection
 model3_yolo = YOLODetector()
 print("[Main] All 3 AI Models successfully initialized!")
 
 # 5. Initialize FastAPI
 app = FastAPI(
     title="Autonomous Driving Data Search & Multi-Model AI Engine",
-    description="Vector search with CLIP + Model 1 (Object Recognition) + Model 2 (Scene Analysis) + Model 3 (YOLO Detection)",
-    version="2.0.0"
+    description="Vector search with CLIP + Model 1 (Object Recognition) + Model 2 (Scene Analysis) + Model 3 (YOLO11 Detection)",
+    version="2.1.0"
 )
 
 app.add_middleware(
@@ -93,7 +93,7 @@ def root():
         "models": {
             "model_1": "Autonomous Object Recognizer (MobileNetV3 Deep CNN)",
             "model_2": "Scenario & Risk Analyzer (Multimodal CLIP)",
-            "model_3": "YOLO Object Detector (YOLOv8)"
+            "model_3": "YOLO11 Object Detector (YOLO11)"
         },
         "indexed_images": count,
         "collection": COLLECTION_NAME
@@ -211,8 +211,8 @@ async def analyze_image(
     else:
         raise HTTPException(status_code=400, detail="Must provide either an uploaded image file or a filename parameter")
 
-    # Run Model 1: Object Recognition
-    m1_out = model1_recognizer.predict(pil_img)
+    # Run Model 1: Object Recognition + Dataset Verification
+    m1_out = model1_recognizer.predict(pil_img, filename=filename if file is None else None)
 
     # Run Model 2: Scenario Analysis
     m2_out = model2_analyzer.analyze(pil_img)
@@ -221,6 +221,8 @@ async def analyze_image(
     m3_out = model3_yolo.detect(pil_img)
 
     return {
+        "is_trained_in_dataset": m1_out.get("is_trained_in_dataset", False),
+        "dataset_check": m1_out.get("dataset_check", {}),
         "model_1_recognition": m1_out,
         "model_2_analysis": m2_out,
         "model_3_yolo": {
@@ -243,6 +245,7 @@ def trigger_index(recreate: bool = False):
         clip_processor=clip_processor,
         client=qdrant_client,
     )
+    model1_recognizer.dataset_verifier.refresh()
     return {"message": "Indexing completed", "indexed_images": count}
 
 
@@ -255,8 +258,9 @@ def trigger_training(
     Retrains Model 1 (Autonomous Object Recognizer) and refreshes loaded weights.
     """
     history = train_model(epochs=epochs, learning_rate=learning_rate)
-    # Reload weights in memory
+    # Reload weights and dataset verifier in memory
     model1_recognizer._load_model()
+    model1_recognizer.dataset_verifier.refresh()
     return {
         "message": "Model 1 training completed successfully!",
         "best_accuracy": max(history["val_acc"]) if history["val_acc"] else 0,

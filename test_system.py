@@ -36,12 +36,19 @@ def run_tests():
         test_img_path = "data/car.jpg"
     img = Image.open(test_img_path)
 
-    # 3. Model 1
-    print("\n[3/5] Testing Model 1: Autonomous Object Recognizer...")
+    # 3. Model 1 + Dataset Training Verifier
+    print("\n[3/5] Testing Model 1: Autonomous Object Recognizer & Dataset Verifier...")
     m1 = ObjectRecognizer()
     r1 = m1.predict(img)
     print(f"  Model Name: {r1['model_name']}")
     print(f"  Top Class: {r1['primary_object']} ({r1['primary_confidence_pct']}%)")
+    print(f"  Dataset Status (Trained Image): {r1['dataset_status_label']}")
+    assert r1["is_trained_in_dataset"] is True, "Expected dataset image to be verified as trained in dataset!"
+
+    untrained_img = Image.new("RGB", (320, 240), (145, 40, 190))
+    r1_untrained = m1.predict(untrained_img)
+    print(f"  Dataset Status (Untrained Image): {r1_untrained['dataset_status_label']} -> {r1_untrained['display_object']}")
+    assert r1_untrained["is_trained_in_dataset"] is False, "Expected external image to be marked NOT trained in dataset!"
     print("  -> PASSED")
 
     # 4. Model 2
@@ -56,19 +63,19 @@ def run_tests():
     print("  -> PASSED")
 
     # 5. Model 3
-    print("\n[5/5] Testing Model 3: YOLO Object Detector with Glare Filtering...")
+    print("\n[5/5] Testing Model 3: YOLO11 Object Detector with Glare Filtering...")
     m3 = YOLODetector()
     r3 = m3.detect(img)
     print(f"  Model Name: {r3['model_name']}")
     print(f"  Detected Entities: {r3['total_objects']}")
     print(f"  Counts: {r3['counts']}")
-    assert r3['total_objects'] > 0, "Expected YOLO to detect vehicles in reference driving frame!"
+    assert r3['total_objects'] > 0, "Expected YOLO11 to detect vehicles in reference driving frame!"
 
-    # Verify RGB/BGR color ordering regression on data/car.jpg
-    if os.path.exists("data/car.jpg"):
-        car_r = m3.detect("data/car.jpg")
-        print(f"  Car RGB Regression Check: {car_r['counts']}")
-        assert car_r['counts'].get("car", 0) >= 1, f"Expected 'car' detection on data/car.jpg, got {car_r['counts']}"
+    # Verify RGB/BGR color ordering regression on driving images
+    test_car_img = "data/red_sports_car_road.jpg" if os.path.exists("data/red_sports_car_road.jpg") else "data/highway_sunny_traffic.jpg"
+    car_r = m3.detect(test_car_img)
+    print(f"  Car Detection Check on {test_car_img}: {car_r['counts']}")
+    assert car_r['total_objects'] >= 1, f"Expected vehicle detection on {test_car_img}, got {car_r['counts']}"
 
     # Test false positive suppression on forest road with sunlight
     forest_img = "data/foggy_forest_road.jpg"

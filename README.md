@@ -12,7 +12,7 @@ An end-to-end Autonomous Driving Data Search and Scenario Intelligence platform 
      Fine-tuned MobileNetV3-Small deep convolutional neural network trained specifically on 11 autonomous driving entity classes (Cars, Pedestrians, Cyclists, Red/Yellow/Green Traffic Lights, Traffic Signs, Trucks/Buses, Motorcycles, Road Hazards, and Forest Sunlight Glare negative samples).
   2. **Model 2: Scenario & Risk Analyzer (Multimodal CLIP Reasoning)**  
      Real-time perception of environmental conditions (Weather, Time/Lighting, Road Topology), calculation of AV Safety Hazard Index (0-100%), and autonomous driving control recommendations (e.g., headway buffer, traction control, AEB standby).
-  3. **Model 3: YOLO Object Detection (YOLOv8 + Signal Verifier)**  
+  3. **Model 3: YOLO Object Detection (YOLO11 + Signal Verifier)**  
      High-speed spatial bounding-box detection of vehicles, pedestrians, cyclists, and traffic signals with HSV signal-state verification (Red/Yellow/Green) and sunlight glare false-positive suppression.
 - **Interactive Web Dashboard**: Streamlit dashboard with 3 specialized studios:
   - 🔍 **Scenario Search & Retrieval**
@@ -36,15 +36,16 @@ Autonomous-Driving-Data-Search-main/
 ├── data/                       # Verified autonomous driving scenario dataset
 ├── models/
 │   ├── object_recognizer.pth   # Trained Model 1 weights
-│   ├── yolov8_autodrive.pt     # Custom YOLO fine-tuned checkpoint
+│   ├── yolo11_autodrive.pt     # Custom YOLO11 fine-tuned checkpoint
 │   ├── training_history.json   # Training accuracy & loss telemetry
 │   └── all_models_summary.json # Multi-model calibration summary
 ├── app.py                      # Interactive Streamlit Web UI
 ├── main.py                     # FastAPI REST API Backend
 ├── populate_db.py              # CLIP Vector Indexing into Qdrant
 ├── train.py                    # PyTorch Training Script for Model 1
-├── train_yolo.py               # YOLOv8 Dataset & Fine-Tuning Script
+├── train_yolo.py               # YOLO11 Dataset & Fine-Tuning Script
 ├── train_all.py                # 3-Model Orchestration & Calibration Script
+├── ingest_dataset.py           # Automated external dataset ingestion & retraining pipeline
 ├── test_system.py              # End-to-end system verification
 └── requirements.txt            # Project dependencies
 ```
@@ -92,7 +93,7 @@ python -m uvicorn main:app --host 127.0.0.1 --port 8000
 |---|---|---|---|
 | **Model 1: Recognize Object** | Classifies driving objects into 11 AV categories (incl. R/Y/G signals + glare negative) | MobileNetV3-Small Deep CNN | Class name, Top-K probability scores |
 | **Model 2: Scenario Analyzer** | Environmental perception & safety risk | Multimodal CLIP ViT-B/32 | Weather, Lighting, Road type, Hazard % (Low/Moderate/High/Critical), AV actions |
-| **Model 3: YOLO Detector** | Spatial bounding-box detection & signal color verification | Ultralytics YOLOv8 + HSV Verifier | Bounding boxes, class/signal tags, count breakdown |
+| **Model 3: YOLO Detector** | Spatial bounding-box detection & signal color verification | Ultralytics YOLO11 + HSV Verifier | Bounding boxes, class/signal tags, count breakdown |
 
 ---
 

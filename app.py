@@ -165,7 +165,7 @@ with st.sidebar:
     - **Model 2: Scenario & Risk Analyzer**  
       Multimodal CLIP zero-shot perception with AV hazard rating & action protocols.
     - **Model 3: YOLO Perception**  
-      YOLOv8 real-time detector with sunlight glare suppression.
+      YOLO11 real-time detector with sunlight glare suppression.
     """)
     st.markdown("---")
     st.caption("AV-Vision Enterprise Autonomous Driving AI v2.2")
@@ -353,15 +353,25 @@ with tab2:
         demo_presets = [
             "None",
             "Sunny Highway Car (highway_sunny_traffic.jpg)",
-            "Rainy Night Intersection (rainy_night_driving.jpg)",
             "White Sports Car Road (car.jpg)",
+            "Aerial Parking Lot Cars (night_highway_speed.jpg)",
+            "Parking Lot Overhead (parking_lot_cars.jpg)",
             "Highway Porsche Speed (red_sports_car_road.jpg)",
             "Forest Road Sunlight (foggy_forest_road.jpg)",
             "Emergency Ambulance (emergency_ambulance_road.jpg)",
             "Passenger Coach Bus (school_bus_suburban.jpg)",
             "Highway Cargo Semi-Truck (truck_freeway_transport.jpg)",
+            "Mountain Highway Truck (mountain_highway_truck.jpg)",
             "Sport Motorcycle Lane (motorcycle_highway_lane.jpg)",
-            "Roadside Bicycle (cyclist_urban_road.jpg)"
+            "Roadside Bicycle (cyclist_urban_road.jpg)",
+            "Pedestrian Crosswalk Urban (pedestrian_crosswalk_urban.jpg)",
+            "Red Traffic Light Signal (traffic_light_red_signal.jpg)",
+            "Yellow Traffic Light Signal (traffic_light_yellow_signal.jpg)",
+            "Green Traffic Light Signal (traffic_light_green_signal.jpg)",
+            "Stop Sign Roadside (stop_sign_roadside.jpg)",
+            "Construction Cones Hazard (construction_cones_hazard.jpg)",
+            "Road Barrier Hazard (road_barrier_hazard.jpg)",
+            "Rainy Night Intersection (rainy_night_driving.jpg)"
         ]
         chosen_sample = st.selectbox("Or select a demo test scenario:", demo_presets)
 
@@ -385,8 +395,9 @@ with tab2:
         run_btn = st.button("⚡ Run Full 3-Model AI Diagnostics", type="primary")
 
         if run_btn or target_image:
-            with st.spinner("Processing frame across Model 1 (Deep CNN), Model 2 (CLIP), and Model 3 (YOLO)..."):
+            with st.spinner("Processing frame across Dataset Verifier, Model 1 (Deep CNN), Model 2 (CLIP), and Model 3 (YOLO11)..."):
                 m1_res, m2_res, m3_res = None, None, None
+                dataset_check = None
 
                 # Route both sample and uploaded frames via backend when online
                 if backend_online:
@@ -411,6 +422,7 @@ with tab2:
                             m1_res = res["model_1_recognition"]
                             m2_res = res["model_2_analysis"]
                             m3_yolo = res["model_3_yolo"]
+                            dataset_check = res.get("dataset_check") or m1_res.get("dataset_check")
                             from core.yolo_detector import YOLODetector
                             m3_res = {
                                 "annotated_image": YOLODetector.draw_detections(target_image, m3_yolo["detections"]),
@@ -424,11 +436,53 @@ with tab2:
                 if m1_res is None:
                     local = get_local_fallback_engines()
                     if local:
-                        m1_res = local["m1"].predict(target_image)
+                        m1_res = local["m1"].predict(target_image, filename=target_filename)
                         m2_res = local["m2"].analyze(target_image)
                         m3_res = local["m3"].detect(target_image)
+                        dataset_check = m1_res.get("dataset_check")
 
                 if m1_res and m2_res and m3_res:
+                    if not dataset_check:
+                        dataset_check = m1_res.get("dataset_check", {})
+                    is_trained = bool(dataset_check.get("is_trained", m1_res.get("is_trained_in_dataset", False)))
+
+                    # Prominent Dataset Training Verification Banner
+                    if is_trained:
+                        matched_f = dataset_check.get("matched_filename", target_filename or "dataset image")
+                        trained_cls = dataset_check.get("trained_class") or m1_res.get("primary_object", "N/A")
+                        sim_pct = dataset_check.get("similarity_pct", 100.0)
+                        st.success(
+                            f"✅ **Image IS Trained by Dataset** — Matched `data/{matched_f}` "
+                            f"(Trained Class: **{trained_cls}** | Match Confidence: **{sim_pct}%**)"
+                        )
+                    else:
+                        closest_f = dataset_check.get("closest_dataset_file", "None")
+                        sim_pct = dataset_check.get("similarity_pct", 0.0)
+                        st.error(
+                            f"❌ **Image is NOT Trained by Dataset** — This uploaded image was not found in the trained `data/` dataset "
+                            f"(Closest dataset sample: `{closest_f}` at `{sim_pct}%` similarity; required `>= 92%`)."
+                        )
+                        if uploaded_file is not None:
+                            if st.button("➕ Add Uploaded Image to Dataset & Train All Models", key="add_untrained_img_btn"):
+                                with st.spinner("Saving image to data/, re-indexing Qdrant, and retraining Model 1..."):
+                                    os.makedirs("data", exist_ok=True)
+                                    safe_name = os.path.basename(uploaded_file.name)
+                                    if not safe_name.lower().endswith((".jpg", ".jpeg", ".png")):
+                                        safe_name += ".jpg"
+                                    save_path = os.path.join("data", safe_name)
+                                    target_image.save(save_path, format="JPEG", quality=94)
+                                    if backend_online:
+                                        requests.post(f"{FASTAPI_URL}/index", timeout=120)
+                                        requests.post(f"{FASTAPI_URL}/train", params={"epochs": 8}, timeout=240)
+                                    else:
+                                        from populate_db import index_images
+                                        from train import train_model
+                                        index_images()
+                                        train_model(epochs=8, batch_size=32)
+                                    st.cache_resource.clear()
+                                    st.success(f"✅ Added `data/{safe_name}` to dataset and retrained all models! Re-run diagnostics to verify.")
+                                    st.rerun()
+
                     c_left, c_mid, c_right = st.columns([1, 1, 1.2])
 
                     with c_left:
@@ -436,15 +490,26 @@ with tab2:
                         st.image(target_image, caption="Input Frame", width="stretch")
                         
                         top_cls = m1_res['primary_object']
-                        badge_c = "hud-badge-cyan"
-                        if "red" in top_cls.lower():
-                            badge_c = "hud-badge-red"
-                        elif "yellow" in top_cls.lower():
-                            badge_c = "hud-badge-amber"
-                        elif "green" in top_cls.lower():
-                            badge_c = "hud-badge-green"
+                        if not is_trained:
+                            st.markdown(
+                                "**Dataset Status:** <span class='hud-badge hud-badge-red'>❌ NOT TRAINED IN DATASET</span>",
+                                unsafe_allow_html=True
+                            )
+                            st.caption(f"Closest Zero-Shot Class Guess: `{top_cls}` ({m1_res['primary_confidence_pct']}%)")
+                        else:
+                            badge_c = "hud-badge-cyan"
+                            if "red" in top_cls.lower():
+                                badge_c = "hud-badge-red"
+                            elif "yellow" in top_cls.lower():
+                                badge_c = "hud-badge-amber"
+                            elif "green" in top_cls.lower():
+                                badge_c = "hud-badge-green"
 
-                        st.markdown(f"**Identified:** <span class='hud-badge {badge_c}'>{top_cls}</span>", unsafe_allow_html=True)
+                            st.markdown(
+                                "**Dataset Status:** <span class='hud-badge hud-badge-green'>✅ TRAINED IN DATASET</span>",
+                                unsafe_allow_html=True
+                            )
+                            st.markdown(f"**Identified:** <span class='hud-badge {badge_c}'>{top_cls}</span>", unsafe_allow_html=True)
                         st.metric("Model Confidence", f"{m1_res['primary_confidence_pct']}%")
                         top_p = m1_res.get("top_predictions", [])
                         df_p = pd.DataFrame(top_p).rename(columns={"class_name": "Class", "confidence_pct": "Confidence %"})
@@ -475,8 +540,8 @@ with tab2:
                             st.write(f"- 🚗 {act}")
 
                     with c_right:
-                        st.markdown("#### 3️⃣ Model 3: YOLO Object Detection")
-                        st.image(m3_res["annotated_image"], caption="YOLOv8 Bounding Boxes", width="stretch")
+                        st.markdown("#### 3️⃣ Model 3: YOLO11 Object Detection")
+                        st.image(m3_res["annotated_image"], caption="YOLO11 Bounding Boxes", width="stretch")
                         st.info(f"**Detected Entities:** {m3_res['total_objects']}")
                         if m3_res["counts"]:
                             st.dataframe(pd.DataFrame(list(m3_res["counts"].items()), columns=["Detected Class", "Count"]), width="stretch")
@@ -491,7 +556,7 @@ with tab3:
     hist_data = None
     best_val_display = "N/A"
     num_classes_display = 11
-    total_samples_display = "1,800+"
+    total_samples_display = "2,400+"
     if os.path.exists(history_file):
         try:
             with open(history_file, "r") as f:
@@ -523,11 +588,12 @@ with tab3:
         - **AV Protocols**: Headway, speed, AEB standby
         """)
     with col_m3:
-        st.markdown("#### 3️⃣ Model 3: YOLO Detector")
+        st.markdown("#### 3️⃣ Model 3: YOLO11 Detector")
         st.markdown("""
-        - **Architecture**: YOLOv8 Real-Time Perception
+        - **Architecture**: YOLO11 Real-Time Perception
         - **Signal Verification**: Red, Yellow, Green color detection
         - **Glare Suppression**: Filters out sunlight/sky false positives
+        - **Weights**: `models/yolo11_autodrive.pt`
         """)
 
     st.markdown("---")
@@ -563,7 +629,7 @@ with tab3:
     if retrain_all_btn:
         with st.spinner("Training and verifying all 3 models on GPU..."):
             from train_all import train_all_models
-            summary = train_all_models(m1_epochs=8, yolo_epochs=3, retrain_m1=True)
+            summary = train_all_models(m1_epochs=8, yolo_epochs=3, retrain_m1=True, retrain_yolo=True)
             get_local_fallback_engines.clear()
             if backend_online:
                 try:

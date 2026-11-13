@@ -40,6 +40,7 @@ class SceneAnalyzer:
         ]
 
         self.road_type_prompts = [
+            ("Parking Lot / Facility", "an aerial or ground view photo of an outdoor parking lot or parking spaces with parked cars"),
             ("Expressway / Highway", "a photo of an open multi-lane highway or interstate with fast traffic"),
             ("Urban City Arterial", "a photo of busy downtown city streets with traffic lights and buildings"),
             ("Pedestrian Crossing", "a photo of an urban street with crosswalk and pedestrians walking"),
@@ -132,6 +133,9 @@ class SceneAnalyzer:
             risk_score += 15
             risk_factors.append("Complex multi-agent urban intersection dynamics")
             action_recommendations.append("Activate 360-degree cross-traffic monitoring")
+        elif "Parking Lot" in road_label:
+            risk_factors.append("Low-speed close-proximity obstacles and parked vehicles detected")
+            action_recommendations.append("Engage Automated Parking Assist / Low-Speed Maneuver Mode (cap velocity to 15 km/h, 360° ultrasonic sonar active)")
         elif "Expressway" in road_label:
             action_recommendations.append("Standard Highway Autopilot (Level 3 ADAS) permitted up to 100 km/h")
 
